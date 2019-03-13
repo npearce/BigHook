@@ -21,8 +21,6 @@ const octokit = require('@octokit/rest')({
 // Ignore self-signed cert (dev environment)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-var DEBUG = false;
-
 function BigHookListener() {
   this.config = {};
   this.state = {};
@@ -125,20 +123,21 @@ BigHookListener.prototype.getConfig = function () {
     let uri = this.restHelper.makeRestnodedUri('/mgmt' +bigHookSettingsPath);
     let restOp = this.createRestOperation(uri);
 
-    util.logDebug('[BigHookListener - DEBUG] - getConfig() Attemtped to fetch config...');
+    util.logDebug('getConfig() Attemtped to fetch config...');
 
     this.restRequestSender.sendGet(restOp)
     .then ((resp) => {
 
-      util.logDebug('[BigHookListener - DEBUG] - getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t'));
+      util.logDebug('getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t'));
 
       if (typeof resp.body.config !== 'undefined') {
 
         if (resp.body.config.debug === true) {
-          DEBUG = true;
+          util.logInfo('DEBUG ENABLED');
+          util.debugEnabled = true;
         }
         else {
-          DEBUG = false;
+          util.debugEnabled = false;
         }
 
         if (typeof resp.body.config.max_queue_length !== 'undefined' && resp.body.config.max_queue_length !== this.config.max_queue_length) {

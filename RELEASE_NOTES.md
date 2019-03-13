@@ -1,5 +1,20 @@
 # RELEASE NOTES
 
+## v0.4.0-release
+
+### Features
+
+* Rename from "Config as Code Webhook Server for BIG-IP" to "BigHook".
+* 
+
+### Fixes
+
+### Known Issues
+
+* Due to the rename, previous versions must be 'uninstalled' before this version can be installed.
+
+---
+
 ## v0.3.0-release
 
 ### Features

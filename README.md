@@ -32,7 +32,7 @@ Combine BigHook with [BigStats](https://github.com/f5devcentral/BigStats) (telem
 2. Engineer visits the devices "configuration as code" repository on GitHub and navigates to the '/templates' directory.
 3. Based on their requirements, the engineer selects the appropriate template. e.g. "Basic load-balancing", "SSL Offload", "Web Application Firewall", and so on.
 4. Engineer creates a new file in the '/deploy' directory using the template and enters the unique deployment-specific data, e.g.: service name, server IP addresses, etc. See template examples below.
-5. The GitHub WebHook sends a Github 'commit' message to the iControl LX REST worker end-point at `/mgmt/shared/webhook/github-listener`.
+5. The GitHub WebHook sends a Github 'commit' message to the iControl LX REST worker end-point at `/mgmt/shared/bighook/listener`.
 6. The iControl LX worker consumes and processes as appropriate.
    1. The iContorl LX worker will parse the commit message and identify any service definition changes: if the commit has 'added', 'modified', or 'removed' a service definition.
    2. When complete, the iControl LX worker will create a 'Github Issue' in the source repository with the results (success/failure) of the commit processing.
@@ -43,7 +43,7 @@ Combine BigHook with [BigStats](https://github.com/f5devcentral/BigStats) (telem
 BigHook
   |- README.md
   |- DIST
-    |- GheWebhookServer-0.3.0-0005.noarch.rpm
+    |- BigHook-0.4.0-0006.noarch.rpm
   |- DOCS
     |- BIG-IP_SETUP.md
     |- GHE_SETUP.md
@@ -59,11 +59,11 @@ BigHook
     |- service_def8.json
   |- SRC
     |- README.md
-    |- GheWebhookServer
+    |- BigHook
       |- nodesjs
-        |- ghe_listener.js
-        |- ghe_settings.js
-        |- ghe_util.js
+        |- bighook_listener.js
+        |- bighook_settings.js
+        |- util.js
 ```
 
 * `/DIST` - the RPMs to install onto BIG-IPs for IaC management.
