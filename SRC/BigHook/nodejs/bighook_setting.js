@@ -8,7 +8,7 @@
 */
 "use strict";
 
-const logger = require('f5-logger').getInstance();
+const util = require('./util');
 const octokit = require('@octokit/rest')({
     headers: {
       accept: 'application/vnd.github.v3+json'
@@ -41,7 +41,7 @@ BigHookSettings.prototype.onStart = function(success, error) {
 
             }
 
-            logger.info('[BigHookSettings] - State loaded.');
+            util.logInfo('State loaded.');
             me.state = state;
         }
 
@@ -77,18 +77,18 @@ BigHookSettings.prototype.onPost = function(restOperation) {
     }
     else {
 
-        logger.info('[BigHookSettings] - Settings updated.');
+        util.logInfo('Settings updated.');
         this.state = newState;
 
         this.validateSettings(newState)
         .then((results) => {
 
-            logger.info('[BigHookSettings] - Settings validation results: ' +results);
+            util.logInfo(`Settings validation results: ${results}`);
 
         })
         .catch((err) => {
             
-            logger.info('[BigHookSettings - ERROR] validateSettings(): ' +err);
+            util.logError(`validateSettings(): ${err}`);
 
         });
 

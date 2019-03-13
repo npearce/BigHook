@@ -6,12 +6,12 @@
 *   http://github.com/npearce
 *
 */
-"use strict";
+'use strict';
 
-const logger = require('f5-logger').getInstance();
 const Queue = require('promise-queue');
 var maxConcurrent = 1;
-const gheSettingsPath = '/shared/bighook/settings';
+const bigHookSettingsPath = '/shared/bighook/settings';
+const util = require('./util');
 const octokit = require('@octokit/rest')({
   headers: {
     accept: 'application/vnd.github.v3+json'
@@ -26,9 +26,10 @@ var DEBUG = false;
 function BigHookListener() {
   this.config = {};
   this.state = {};
+  util.init('BigHook');
 }
 
-BigHookListener.prototype.WORKER_URI_PATH = "shared/bighook/listener";
+BigHookListener.prototype.WORKER_URI_PATH = 'shared/bighook/listener';
 BigHookListener.prototype.isPublic = true;
 BigHookListener.prototype.isSingleton = true;
 
@@ -37,10 +38,10 @@ BigHookListener.prototype.isSingleton = true;
  */
 BigHookListener.prototype.onStart = function(success, error) {
 
-  logger.info("[BigHookListener]: Starting...");
+  util.logInfo('Starting...');
 
   // Make GheSettings worker a dependency.
-  var gheSettingsUrl = this.restHelper.makeRestnodedUri(gheSettingsPath);
+  var gheSettingsUrl = this.restHelper.makeRestnodedUri(bigHookSettingsPath);
   this.dependencies.push(gheSettingsUrl);
   success();
 
@@ -61,7 +62,7 @@ BigHookListener.prototype.onGet = function(restOperation) {
  */
 BigHookListener.prototype.onPost = function(restOperation) {
 
-  if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - In BigHookListener.prototype.onPost()'); }
+  util.logDebug('onPost() - In BigHookListener.prototype.onPost()');
 
   // Nuke for each webhook workflow.
   this.state = {};
@@ -80,13 +81,13 @@ BigHookListener.prototype.onPost = function(restOperation) {
     this.state.repo_fullname = postData.repository.full_name; // owner+responsitory name
     this.state.before = postData.before; // The sha of the 'previous' commit. Required for processing deletions.
 
-    if (DEBUG === true) { logger.info("[BigHookListener - DEBUG] Message recevied from Github repo: " +postData.repository.full_name); }
+    util.logDebug("onPost() - Message recevied from Github repo: " +postData.repository.full_name);
 
     // Grab the settings from the persisted state /ghe_settings worker
     this.getConfig()
     .then((config) => {
 
-      if (DEBUG === true) { logger.info("[BigHookListener - DEBUG] this.getConfig() => returns: " +JSON.stringify(config, '', '\t')); }
+      util.logDebug("onPost() - this.getConfig() => returns: " +JSON.stringify(config, '', '\t'));
 
       // Commence parsing the commit message for work to do.
       return this.parseCommitMessage(postData);
@@ -94,13 +95,13 @@ BigHookListener.prototype.onPost = function(restOperation) {
     })
     .then((actions) => {
 
-      if (DEBUG === true) { logger.info('[BigHookListener] - the following additions/modifications/deletions were performed: ' +JSON.stringify(actions, '', '\t')); }
+      util.logDebug('the following additions/modifications/deletions were performed: ' +JSON.stringify(actions, '', '\t'));
       return;
 
     })
     .catch((err) => {
 
-      logger.info('[BigHookListener - ERROR] - error in master promise chain: ' +JSON.stringify(err));
+      util.logError('error in master promise chain: ' +JSON.stringify(err));
 
     });
   
@@ -121,15 +122,15 @@ BigHookListener.prototype.getConfig = function () {
   
   return new Promise((resolve, reject) => {
 
-    let uri = this.restHelper.makeRestnodedUri('/mgmt' +gheSettingsPath);
+    let uri = this.restHelper.makeRestnodedUri('/mgmt' +bigHookSettingsPath);
     let restOp = this.createRestOperation(uri);
 
-    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getConfig() Attemtped to fetch config...'); }
+    util.logDebug('[BigHookListener - DEBUG] - getConfig() Attemtped to fetch config...');
 
     this.restRequestSender.sendGet(restOp)
     .then ((resp) => {
 
-      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t')); }
+      util.logDebug('[BigHookListener - DEBUG] - getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t'));
 
       if (typeof resp.body.config !== 'undefined') {
 
@@ -163,7 +164,7 @@ BigHookListener.prototype.getConfig = function () {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[BigHookListener] - getConfig() - Error retrieving settings: ' +errorStatusCode+ ' - ' +errorBody);
+      util.logInfo('getConfig() - Error retrieving settings: ' +errorStatusCode+ ' - ' +errorBody);
 
     });
 
@@ -185,7 +186,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
   return new Promise((resolve, reject) => {
 
     this.state.actions = [];
-    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] In parseCommitMessage() with commitMessage.commits:' +JSON.stringify(commitMessage.commits)); }
+    util.logDebug('parseCommitMessage() - with commitMessage.commits:' +JSON.stringify(commitMessage.commits));
 
     // Iterate through 'commits' array to handle added|modified|removed definitions
     commitMessage.commits.map((element, index) => {
@@ -200,7 +201,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each addition, fetch the service definition from the repo, and pass to this.applyServiceDefinition()
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found an addition to the repo - serviceAdd: ' +serviceAdd); }
+          util.logDebug('Found an addition to the repo - serviceAdd: ' +serviceAdd);
           return this.getServiceDefinition(serviceAdd)
 
           .then((service_definition) => {
@@ -216,12 +217,8 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
-
-            if (DEBUG === true) { 
-              logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
-              logger.info('queue.getPendingLength(): ' +queue.getQueueLength());
-            }
+            util.logDebug('this.applyServiceDefinition() - resp: ' +JSON.stringify(resp));
+            util.logDebug(`queue.getQueueLength(): ${queue.getQueueLength()} queue.getPendingLength(): ${queue.getQueueLength()}`);
 
             // Post the results back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceAdd, "Added", resp);
@@ -229,7 +226,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
+            util.logError('parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceAdd, "ERROR", err);
@@ -250,7 +247,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each modification, fetch the service definition from the repo, and pass to this.applyServiceDefinition()
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found a modification to the repo - serviceMod: ' +serviceMod); }
+          util.logDebug('Found a modification to the repo - serviceMod: ' +serviceMod);
           this.getServiceDefinition(serviceMod)
 
           .then((service_definition) => {
@@ -266,12 +263,8 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
-
-            if (DEBUG === true) { 
-              logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
-              logger.info('queue.getPendingLength(): ' +queue.getQueueLength());
-            }
+            util.logDebug('applyServiceDefinition() - resp: ' +JSON.stringify(resp));
+            util.logDebug(`queue.getQueueLength(): ${queue.getQueueLength()} queue.getPendingLength(): ${queue.getQueueLength()}`);
 
             // Post the results back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceMod, "Modified", resp);
@@ -279,7 +272,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
+            util.logInfo('parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceMod, "ERROR", err);
@@ -300,8 +293,8 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each deletion, fetch the service definition from the repo, so we can identify the Tenant          
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found a deletion to the repo - serviceDel: ' +serviceDel); }
-          logger.info('theDel is: ' +serviceDel);
+          util.logDebug('Found a deletion to the repo - serviceDel: ' +serviceDel);
+          util.logInfo(`theDel is: ${serviceDel}`);
           
           return this.getDeletedServiceDefinition(serviceDel, commitMessage.before)
 
@@ -317,7 +310,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
             return queue.add(() => {
 
               // Pass the Tenant name to deleteServiceDefinition() for deletion
-              if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.identifyTenant() found: ' +tenant); }
+              util.logDebug(`this.identifyTenant() found: ${tenant}`);
               return this.deleteServiceDefinition(tenant);
 
             });
@@ -325,12 +318,8 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })          
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.deleteServiceDefinition() - resp: ' +JSON.stringify(resp)); }
-
-            if (DEBUG === true) { 
-              logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
-              logger.info('queue.getPendingLength(): ' +queue.getQueueLength());
-            }
+            util.logDebug(`deleteServiceDefinition() - resp: ${JSON.stringify(resp)}`);
+            util.logDebug(`queue.getQueueLength():${queue.getQueueLength()} queue.getPendingLength(): ${queue.getQueueLength()}`);
 
             // Post the results back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceDel, "Deleted", resp);
@@ -338,7 +327,7 @@ BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.deleteServiceDefinition(body): ' +err);
+            util.logError(`parseCommitMessage() -> return this.deleteServiceDefinition(body): ${err}`);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceDel, "ERROR", err);
@@ -385,7 +374,7 @@ BigHookListener.prototype.getServiceDefinition = function (object_name) {
       // content will be base64 encoded
       const content = Buffer.from(result.data.content, 'base64').toString();
 
-      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getServiceDefinition(): Got something back from GitHub repo: ' +content); }
+      util.logDebug(`getServiceDefinition(): Got something back from GitHub repo: ${content}`);
       
       var service_def;
 
@@ -396,7 +385,7 @@ BigHookListener.prototype.getServiceDefinition = function (object_name) {
 
         if (typeof service_def.class !== undefined && service_def.class === 'AS3' && typeof service_def.declaration.class !== undefined && service_def.declaration.class === 'ADC' && typeof service_def.action !== undefined && service_def.action === 'deploy' || service_def.action === 'dry-run') {
           
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getServiceDefinition(): We have a BIG-IP Service Defintion: ' +JSON.stringify(service_def)); }
+          util.logDebug(`getServiceDefinition(): We have a BIG-IP Service Defintion: ${JSON.stringify(service_def)}`);
 
           resolve(service_def);
 
@@ -404,15 +393,15 @@ BigHookListener.prototype.getServiceDefinition = function (object_name) {
         else {
 
           let error = '\''+ object_name +'\' is not an AS3 declaration. Skipping.....';
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] ' +error); }
+          util.logDebug(`getServiceDefinition() - ${error}`);
           reject(error);
 
         }
 
       } catch (err) {
 
-        let error = '[BigHookListener - ERROR] - getServiceDefinition(): Attempting to parse service def error: ' +err;
-        logger.info(error);
+        let error = `getServiceDefinition(): Attempting to parse service def error: ${err}`;
+        util.logError(error);
         reject(error);
         
       }
@@ -421,7 +410,7 @@ BigHookListener.prototype.getServiceDefinition = function (object_name) {
     })
     .catch(err => {
 
-      logger.info('[BigHookListener - ERROR] - getServiceDefinition(): ' +JSON.stringify(err));
+      util.logError(`getServiceDefinition(): ${JSON.stringify(err)}`);
 
     });
   });
@@ -445,13 +434,13 @@ BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, b
       token: this.config.ghe_access_token
     });
 
-    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the object name: ' +object_name+ ' and the previous commit sha: ' +before); }
+    util.logDebug(`getDeletedServiceDefinition() - the object name: '${object_name}' and the previous commit sha: ${before}`);
 
     octokit.gitdata.getCommit({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, commit_sha: before})
     .then((previousCommit) => {
 
       // From the previous commit, retireve the repo tree 
-      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the pre-deletion commit: ' +JSON.stringify(previousCommit, '', '\t')); }
+      util.logDebug(`getDeletedServiceDefinition() - the pre-deletion commit: ' ${JSON.stringify(previousCommit, '', '\t')}`);
       return octokit.gitdata.getTree({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, tree_sha: previousCommit.data.tree.sha, recursive: 1});
 
     })
@@ -462,7 +451,7 @@ BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, b
 
     })
     .then((theSha) => {
-      logger.info('theSha:' +theSha);
+      util.logInfo(`theSha: ${theSha}`);
 
       // Grab the service definition (from beyond the grave) 
       return octokit.gitdata.getBlob({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, file_sha: theSha});
@@ -470,7 +459,7 @@ BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, b
     })
     .then((result) => {
 
-      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the deleted service definition: ' +JSON.stringify(result, '', '\t')); }
+      util.logDebug(`getDeletedServiceDefinition() - the deleted service definition: ${JSON.stringify(result, '', '\t')}`);
 
       // The content will be bas64 encoded
       const content = Buffer.from(result.data.content, 'base64').toString();
@@ -489,15 +478,15 @@ BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, b
         else {
 
           let error = '\''+ object_name +'\' is not an AS3 declaration. Skipping.....';
-          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] ' +error); }
+          util.logError(error);
           reject(error);
           
         }
 
       } catch (err) {
 
-        let error = '[BigHookListener - ERROR] - getServiceDeletedDefinition(): Attempting to parse service def: ' +err;
-        logger.info(error);
+        let error = `getServiceDeletedDefinition(): Attempting to parse service def: ${err}`;
+        util.logError(error);
         reject(error);
         
       }
@@ -505,7 +494,7 @@ BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, b
     })
     .catch(err => {
 
-      logger.info('[BigHookListener - ERROR] - getServiceDeletedDefinition(): ' +JSON.stringify(err));
+      util.logError(`getServiceDeletedDefinition(): ${JSON.stringify(err)}`);
 
     });
 
@@ -531,7 +520,7 @@ BigHookListener.prototype.identifyDeletedFileInTree = function (previousTree, ob
       if (element.path === object_name) {
 
         theSha = element.sha;
-        if (DEBUG === true) { logger.info('[GheListenenr - DEBUG] identifyDeletedFileInTree() - tree element: ' +JSON.stringify(element)+ 'theSha: ' +theSha); }
+        util.logDebug(`identifyDeletedFileInTree() - tree element: ${JSON.stringify(element)}, theSha: ${theSha}`);
 
         // Return the deleted objects sha
         resolve(theSha);
@@ -558,11 +547,11 @@ BigHookListener.prototype.applyServiceDefinition = function (service_def) {
 
   return new Promise((resolve, reject) => {
 
-    if (DEBUG === true) { logger.info('[GheListenenr - DEBUG] applyServiceDefinition(): branch is: ' +this.state.branch+ ' and action is: ' +service_def.action); }
+    util.logDebug(`applyServiceDefinition() - branch is: ${this.state.branch} and action is: ${service_def.action}`);
 
     if (this.state.branch !== 'master') {
 
-      if (DEBUG === true) { logger.info('[GheListenenr - DEBUG] applyServiceDefinition(): branch is not \'master\'. Changing action to: \'dry-run\''); }
+      util.logDebug(`applyServiceDefinition() - branch is not \'master\'. Changing action to: \'dry-run\'`);
       service_def.action = 'dry-run';
 
     }
@@ -576,10 +565,8 @@ BigHookListener.prototype.applyServiceDefinition = function (service_def) {
     this.restRequestSender.sendPost(restOp)
     .then((resp) => {
 
-      if (DEBUG === true) {
-        logger.info('[BigHookListener - DEBUG] - applyServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
-        logger.info('[BigHookListener - DEBUG] - applyServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
-      }
+      util.logDebug(`applyServiceDefinition() - resp.statusCode: ${JSON.stringify(resp.statusCode)}`);
+      util.logDebug(`applyServiceDefinition() - resp.body: ${JSON.stringify(resp.body, '', '\t')}`);
       resolve(resp.body);
 
     })
@@ -588,7 +575,7 @@ BigHookListener.prototype.applyServiceDefinition = function (service_def) {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[BigHookListener - ERROR] - applyServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
+      util.logError(`applyServiceDefinition(): ${errorStatusCode} - ${errorBody}`);
 
     });
 
@@ -609,12 +596,12 @@ BigHookListener.prototype.identifyTenant = function (declaration) {
   
     var tenant;
     Object.keys(declaration).map((key, index) => {
-      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] processing declaration keys. Current key is: ' +key); }
+      util.logDebug(`processing declaration keys. Current key is: ${key}`);
 
       if (declaration[key].class == 'Tenant' ) {
 
         tenant = key; 
-        if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - The \'Tenant\' is: ' +key); }  
+        util.logDebug(`The \'Tenant\' is: ' ${key}`);   
         resolve(tenant);
 
       }
@@ -650,10 +637,8 @@ BigHookListener.prototype.deleteServiceDefinition = function (tenant) {
     this.restRequestSender.sendDelete(restOp)
     .then((resp) => {
 
-      if (DEBUG === true) {
-        logger.info('[BigHookListener - DEBUG] - deleteServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
-        logger.info('[BigHookListener - DEBUG] - deleteServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
-      }
+      util.logDebug(`deleteServiceDefinition() - resp.statusCode: ${JSON.stringify(resp.statusCode)}`);
+      util.logDebug(`deleteServiceDefinition() - resp.body: ${JSON.stringify(resp.body, '', '\t')}`);
 
       resolve(resp.body);
 
@@ -663,7 +648,7 @@ BigHookListener.prototype.deleteServiceDefinition = function (tenant) {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[BigHookListener - ERROR] - deleteServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
+      util.logError(`deleteServiceDefinition(): ${errorStatusCode} - ${errorBody}`);
 
     });
 
@@ -710,13 +695,13 @@ BigHookListener.prototype.createGithubIssue = function (file_name, action, resul
     octokit.issues.create({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, title: title, labels: labels, body: body})
     .then((result) => {
 
-      logger.info('[BigHookListener] - createGithubIssue() result.status: ' +result.status);
+      util.logInfo(`createGithubIssue() result.status: ' ${result.status}`);
       resolve(result.status);
 
     })
     .catch((err) => {
 
-      logger.info('[BigHookListener - ERROR] - createGithubIssue() error: ' +JSON.stringify(err, '', '\t'));
+      util.logError(`createGithubIssue() error: ${JSON.stringify(err, '', '\t')}`);
 
     });
   });
