@@ -1,5 +1,5 @@
 /*
-*   GheSettings:
+*   BigHookSettings:
 *     GitHub Enterprise webhook server Settings.
 *
 *   N. Pearce, April 2018
@@ -16,19 +16,19 @@ const octokit = require('@octokit/rest')({
 });
 const os = require('os');
   
-function GheSettings() {
+function BigHookSettings() {
   this.state = {};
 }
 
-GheSettings.prototype.WORKER_URI_PATH = "shared/webhook/github-settings";
-GheSettings.prototype.isPublic = true;
-GheSettings.prototype.isSingleton = true;
-GheSettings.prototype.isPersisted = true;
+BigHookSettings.prototype.WORKER_URI_PATH = "shared/webhook/github-settings";
+BigHookSettings.prototype.isPublic = true;
+BigHookSettings.prototype.isSingleton = true;
+BigHookSettings.prototype.isPersisted = true;
 
 /**
  * handle onStart
  */
-GheSettings.prototype.onStart = function(success, error) {
+BigHookSettings.prototype.onStart = function(success, error) {
 
     var me = this;
     this.loadState(null,
@@ -36,12 +36,12 @@ GheSettings.prototype.onStart = function(success, error) {
         function (err, state) {
             if (err) {
 
-                error('[GheSettings] - Error loading state:' +err);
+                error('[BigHookSettings] - Error loading state:' +err);
                 return;
 
             }
 
-            logger.info('[GheSettings] - State loaded.');
+            logger.info('[BigHookSettings] - State loaded.');
             me.state = state;
         }
 
@@ -53,7 +53,7 @@ GheSettings.prototype.onStart = function(success, error) {
 /**
  * handle onGet HTTP request
  */
-GheSettings.prototype.onGet = function(restOperation) {
+BigHookSettings.prototype.onGet = function(restOperation) {
 
     // Respond with the persisted state (config)
     restOperation.setBody(this.state);
@@ -64,31 +64,31 @@ GheSettings.prototype.onGet = function(restOperation) {
 /**
  * handle onPost HTTP request
  */
-GheSettings.prototype.onPost = function(restOperation) {
+BigHookSettings.prototype.onPost = function(restOperation) {
 
     var newState = restOperation.getBody();
 
     // If there's no 
     if (!newState) {
 
-        restOperation.fail(new Error("[GheSettings] - No state provided..."));
+        restOperation.fail(new Error("[BigHookSettings] - No state provided..."));
         return;
 
     }
     else {
 
-        logger.info('[GheSettings] - Settings updated.');
+        logger.info('[BigHookSettings] - Settings updated.');
         this.state = newState;
 
         this.validateSettings(newState)
         .then((results) => {
 
-            logger.info('[GheSettings] - Settings validation results: ' +results);
+            logger.info('[BigHookSettings] - Settings validation results: ' +results);
 
         })
         .catch((err) => {
             
-            logger.info('[GheSettings - ERROR] validateSettings(): ' +err);
+            logger.info('[BigHookSettings - ERROR] validateSettings(): ' +err);
 
         });
 
@@ -102,7 +102,7 @@ GheSettings.prototype.onPost = function(restOperation) {
 /**
  * validate settings
  */
-GheSettings.prototype.validateSettings = function(newState) {
+BigHookSettings.prototype.validateSettings = function(newState) {
 
     return new Promise((resolve, reject) => {
 
@@ -134,7 +134,7 @@ GheSettings.prototype.validateSettings = function(newState) {
 /**
  * handle /example HTTP request
  */
-GheSettings.prototype.getExampleState = function () {    
+BigHookSettings.prototype.getExampleState = function () {    
   
     return {
         "config": {
@@ -148,4 +148,4 @@ GheSettings.prototype.getExampleState = function () {
   
 };
 
-module.exports = GheSettings;
+module.exports = BigHookSettings;

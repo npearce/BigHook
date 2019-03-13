@@ -1,4 +1,4 @@
-# Github Configuration-as-Code WebHook Server for F5 BIG-IP
+# BigHook: The Github Configuration-as-Code WebHook Server for F5 BIG-IP
 
 <img align="right" width="300px" src="IaC_Logo-300dpi.png" alt="IaC_Logo"/>
 
@@ -6,11 +6,11 @@ Using GitHub's Webhook feature, this Webhook Server automates Configuration as C
 
 ## Description
 
-Configuration-as-Code has predominantely focussed on 'server' infrastructure. However, this 'Network Configuration as Code' solution allows engineers to 'commit' F5 BIG-IP service definitions to a Github, or Github Enterprise, repository, which results in configured F5 BIG-IP application services ready for application traffic. Installing this Webhook Server onto BIG-IP devices enables for the automated deployment of BIG-IP configurations directly via a Github Webhook.
+Configuration-as-Code has predominantely focussed on 'server' infrastructure. However, this 'Network Configuration as Code' solution allows engineers to 'commit' F5 BIG-IP service definitions to a Github, or Github Enterprise, repository, which results in configured F5 BIG-IP application services ready for application traffic. Installing BigHook onto BIG-IP devices enables for the automated deployment of BIG-IP configurations directly via a Github Webhook.
 
-This solution was written upon the iControl LX framework. Installed on a BIG-IP, this iControl LX worker presents a `/mgmt/shared/webhook/github-listener` REST end-point ready to receive Github 'commit' notifications.
+This solution was written upon the iControl LX framework. Installed on a BIG-IP, this iControl LX worker presents a `/mgmt/shared/bighook/github-listener` REST end-point ready to receive Github 'commit' notifications.
 
-Combine the Github Webhook Server with [BigStats](https://github.com/f5devcentral/BigStats) (telemetry exporter) for a more complete solution:
+Combine BigHook with [BigStats](https://github.com/f5devcentral/BigStats) (telemetry exporter) for a more complete solution:
 
 ![](Webhook-BigStats-Arch_Diag.png)
 
@@ -40,7 +40,7 @@ Combine the Github Webhook Server with [BigStats](https://github.com/f5devcentra
 ## Repository Structure
 
 ```sh
-GHE_IaC_WebHook
+BigHook
   |- README.md
   |- DIST
     |- GheWebhookServer-0.3.0-0005.noarch.rpm
@@ -69,4 +69,4 @@ GHE_IaC_WebHook
 * `/DIST` - the RPMs to install onto BIG-IPs for IaC management.
 * `/DOCS` - the setup and usage instructions for GHE an BIG-IP.
 * `/EXAMPLES` - contains AS3 service definition examples for configuring BIG-IP application services.
-* `/SRC` - the WebHook server iControl LX source.
+* `/SRC` - the BigHook server iControl LX source.

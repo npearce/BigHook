@@ -1,6 +1,6 @@
 /*
-*   GheListener:
-*     GitHub Enterprise Webhook Server for F5 BIG-IP.
+*   BigHookListener:
+*     SCM Webhook Server for F5 BIG-IP.
 *
 *   N. Pearce, June 2018
 *   http://github.com/npearce
@@ -11,7 +11,7 @@
 const logger = require('f5-logger').getInstance();
 const Queue = require('promise-queue');
 var maxConcurrent = 1;
-const gheSettingsPath = '/shared/webhook/github-settings';
+const gheSettingsPath = '/shared/bighook/settings';
 const octokit = require('@octokit/rest')({
   headers: {
     accept: 'application/vnd.github.v3+json'
@@ -23,21 +23,21 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 var DEBUG = false;
 
-function GheListener() {
+function BigHookListener() {
   this.config = {};
   this.state = {};
 }
 
-GheListener.prototype.WORKER_URI_PATH = "shared/webhook/github-listener";
-GheListener.prototype.isPublic = true;
-GheListener.prototype.isSingleton = true;
+BigHookListener.prototype.WORKER_URI_PATH = "shared/bighook/listener";
+BigHookListener.prototype.isPublic = true;
+BigHookListener.prototype.isSingleton = true;
 
 /**
  * handle onStart
  */
-GheListener.prototype.onStart = function(success, error) {
+BigHookListener.prototype.onStart = function(success, error) {
 
-  logger.info("[GheListener] GitHub Enterprise WebHook Server: Starting...");
+  logger.info("[BigHookListener]: Starting...");
 
   // Make GheSettings worker a dependency.
   var gheSettingsUrl = this.restHelper.makeRestnodedUri(gheSettingsPath);
@@ -49,7 +49,7 @@ GheListener.prototype.onStart = function(success, error) {
 /**
  * handle onGet HTTP request
  */
-GheListener.prototype.onGet = function(restOperation) {
+BigHookListener.prototype.onGet = function(restOperation) {
 
   restOperation.setBody(this.state);
   this.completeRestOperation(restOperation);
@@ -59,9 +59,9 @@ GheListener.prototype.onGet = function(restOperation) {
 /**
  * handle onPost HTTP request
  */
-GheListener.prototype.onPost = function(restOperation) {
+BigHookListener.prototype.onPost = function(restOperation) {
 
-  if (DEBUG === true) { logger.info('[GheListener - DEBUG] - In GheListener.prototype.onPost()'); }
+  if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - In BigHookListener.prototype.onPost()'); }
 
   // Nuke for each webhook workflow.
   this.state = {};
@@ -80,13 +80,13 @@ GheListener.prototype.onPost = function(restOperation) {
     this.state.repo_fullname = postData.repository.full_name; // owner+responsitory name
     this.state.before = postData.before; // The sha of the 'previous' commit. Required for processing deletions.
 
-    if (DEBUG === true) { logger.info("[GheListener - DEBUG] Message recevied from Github repo: " +postData.repository.full_name); }
+    if (DEBUG === true) { logger.info("[BigHookListener - DEBUG] Message recevied from Github repo: " +postData.repository.full_name); }
 
     // Grab the settings from the persisted state /ghe_settings worker
     this.getConfig()
     .then((config) => {
 
-      if (DEBUG === true) { logger.info("[GheListener - DEBUG] this.getConfig() => returns: " +JSON.stringify(config, '', '\t')); }
+      if (DEBUG === true) { logger.info("[BigHookListener - DEBUG] this.getConfig() => returns: " +JSON.stringify(config, '', '\t')); }
 
       // Commence parsing the commit message for work to do.
       return this.parseCommitMessage(postData);
@@ -94,19 +94,19 @@ GheListener.prototype.onPost = function(restOperation) {
     })
     .then((actions) => {
 
-      if (DEBUG === true) { logger.info('[GheListener] - the following additions/modifications/deletions were performed: ' +JSON.stringify(actions, '', '\t')); }
+      if (DEBUG === true) { logger.info('[BigHookListener] - the following additions/modifications/deletions were performed: ' +JSON.stringify(actions, '', '\t')); }
       return;
 
     })
     .catch((err) => {
 
-      logger.info('[GheListener - ERROR] - error in master promise chain: ' +JSON.stringify(err));
+      logger.info('[BigHookListener - ERROR] - error in master promise chain: ' +JSON.stringify(err));
 
     });
   
   }
 
-  let restOpBody = { message: '[F5 iControl LX worker: GheListener] Thanks for the message, GitHub!' };  
+  let restOpBody = { message: '[F5 iControl LX worker: BigHookListener] Thanks for the message, GitHub!' };  
   restOperation.setBody(restOpBody);
   this.completeRestOperation(restOperation);
   
@@ -117,19 +117,19 @@ GheListener.prototype.onPost = function(restOperation) {
  * 
  * @returns {Promise} Promise Object representing operating settings retreived from GheSettings (persisted state) worker
  */
-GheListener.prototype.getConfig = function () {
+BigHookListener.prototype.getConfig = function () {
   
   return new Promise((resolve, reject) => {
 
     let uri = this.restHelper.makeRestnodedUri('/mgmt' +gheSettingsPath);
     let restOp = this.createRestOperation(uri);
 
-    if (DEBUG === true) { logger.info('[GheListener - DEBUG] - getConfig() Attemtped to fetch config...'); }
+    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getConfig() Attemtped to fetch config...'); }
 
     this.restRequestSender.sendGet(restOp)
     .then ((resp) => {
 
-      if (DEBUG === true) { logger.info('[GheListener - DEBUG] - getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t')); }
+      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getConfig() Response: ' +JSON.stringify(resp.body.config,'', '\t')); }
 
       if (typeof resp.body.config !== 'undefined') {
 
@@ -153,7 +153,7 @@ GheListener.prototype.getConfig = function () {
       }
       else {
 
-        reject('[GheListener - ERROR] getConfig() -  No settings found. Check /ghe_settings');
+        reject('[BigHookListener - ERROR] getConfig() -  No settings found. Check /ghe_settings');
 
       }
 
@@ -163,7 +163,7 @@ GheListener.prototype.getConfig = function () {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[GheListener] - getConfig() - Error retrieving settings: ' +errorStatusCode+ ' - ' +errorBody);
+      logger.info('[BigHookListener] - getConfig() - Error retrieving settings: ' +errorStatusCode+ ' - ' +errorBody);
 
     });
 
@@ -178,14 +178,14 @@ GheListener.prototype.getConfig = function () {
  * 
  * @returns {Object} array of addition/modification/deletion actions
  */
-GheListener.prototype.parseCommitMessage = function (commitMessage) {
+BigHookListener.prototype.parseCommitMessage = function (commitMessage) {
 
   var queue = new Queue(maxConcurrent, this.config.max_queue_length);
 
   return new Promise((resolve, reject) => {
 
     this.state.actions = [];
-    if (DEBUG === true) { logger.info('[GheListener - DEBUG] In parseCommitMessage() with commitMessage.commits:' +JSON.stringify(commitMessage.commits)); }
+    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] In parseCommitMessage() with commitMessage.commits:' +JSON.stringify(commitMessage.commits)); }
 
     // Iterate through 'commits' array to handle added|modified|removed definitions
     commitMessage.commits.map((element, index) => {
@@ -200,7 +200,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each addition, fetch the service definition from the repo, and pass to this.applyServiceDefinition()
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] Found an addition to the repo - serviceAdd: ' +serviceAdd); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found an addition to the repo - serviceAdd: ' +serviceAdd); }
           return this.getServiceDefinition(serviceAdd)
 
           .then((service_definition) => {
@@ -216,7 +216,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[GheListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
+            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
 
             if (DEBUG === true) { 
               logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
@@ -229,7 +229,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[GheListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
+            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceAdd, "ERROR", err);
@@ -250,7 +250,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each modification, fetch the service definition from the repo, and pass to this.applyServiceDefinition()
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] Found a modification to the repo - serviceMod: ' +serviceMod); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found a modification to the repo - serviceMod: ' +serviceMod); }
           this.getServiceDefinition(serviceMod)
 
           .then((service_definition) => {
@@ -266,7 +266,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[GheListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
+            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.applyServiceDefinition() - resp: ' +JSON.stringify(resp)); }
 
             if (DEBUG === true) { 
               logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
@@ -279,7 +279,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[GheListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
+            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.applyServiceDefinition(body): ' +err);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceMod, "ERROR", err);
@@ -300,7 +300,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           this.state.actions.push(action);
 
           // For each deletion, fetch the service definition from the repo, so we can identify the Tenant          
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] Found a deletion to the repo - serviceDel: ' +serviceDel); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] Found a deletion to the repo - serviceDel: ' +serviceDel); }
           logger.info('theDel is: ' +serviceDel);
           
           return this.getDeletedServiceDefinition(serviceDel, commitMessage.before)
@@ -317,7 +317,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
             return queue.add(() => {
 
               // Pass the Tenant name to deleteServiceDefinition() for deletion
-              if (DEBUG === true) { logger.info('[GheListener - DEBUG] this.identifyTenant() found: ' +tenant); }
+              if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.identifyTenant() found: ' +tenant); }
               return this.deleteServiceDefinition(tenant);
 
             });
@@ -325,7 +325,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })          
           .then((resp) => {
 
-            if (DEBUG === true) { logger.info('[GheListener - DEBUG] this.deleteServiceDefinition() - resp: ' +JSON.stringify(resp)); }
+            if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] this.deleteServiceDefinition() - resp: ' +JSON.stringify(resp)); }
 
             if (DEBUG === true) { 
               logger.info('queue.getQueueLength(): ' +queue.getQueueLength());
@@ -338,7 +338,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
           })
           .catch((err) => {
 
-            logger.info('[GheListener - ERROR] parseCommitMessage() -> return this.deleteServiceDefinition(body): ' +err);
+            logger.info('[BigHookListener - ERROR] parseCommitMessage() -> return this.deleteServiceDefinition(body): ' +err);
 
             // Post the error back into the source repo as a GitHub Issue
             this.createGithubIssue(serviceDel, "ERROR", err);
@@ -369,7 +369,7 @@ GheListener.prototype.parseCommitMessage = function (commitMessage) {
  * 
  * @returns {Object} the service defition retrieved from GitHub
  */
-GheListener.prototype.getServiceDefinition = function (object_name) {
+BigHookListener.prototype.getServiceDefinition = function (object_name) {
 
   return new Promise((resolve, reject) => {
 
@@ -385,7 +385,7 @@ GheListener.prototype.getServiceDefinition = function (object_name) {
       // content will be base64 encoded
       const content = Buffer.from(result.data.content, 'base64').toString();
 
-      if (DEBUG === true) { logger.info('[GheListener - DEBUG] - getServiceDefinition(): Got something back from GitHub repo: ' +content); }
+      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getServiceDefinition(): Got something back from GitHub repo: ' +content); }
       
       var service_def;
 
@@ -396,7 +396,7 @@ GheListener.prototype.getServiceDefinition = function (object_name) {
 
         if (typeof service_def.class !== undefined && service_def.class === 'AS3' && typeof service_def.declaration.class !== undefined && service_def.declaration.class === 'ADC' && typeof service_def.action !== undefined && service_def.action === 'deploy' || service_def.action === 'dry-run') {
           
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] - getServiceDefinition(): We have a BIG-IP Service Defintion: ' +JSON.stringify(service_def)); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - getServiceDefinition(): We have a BIG-IP Service Defintion: ' +JSON.stringify(service_def)); }
 
           resolve(service_def);
 
@@ -404,14 +404,14 @@ GheListener.prototype.getServiceDefinition = function (object_name) {
         else {
 
           let error = '\''+ object_name +'\' is not an AS3 declaration. Skipping.....';
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] ' +error); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] ' +error); }
           reject(error);
 
         }
 
       } catch (err) {
 
-        let error = '[GheListener - ERROR] - getServiceDefinition(): Attempting to parse service def error: ' +err;
+        let error = '[BigHookListener - ERROR] - getServiceDefinition(): Attempting to parse service def error: ' +err;
         logger.info(error);
         reject(error);
         
@@ -421,7 +421,7 @@ GheListener.prototype.getServiceDefinition = function (object_name) {
     })
     .catch(err => {
 
-      logger.info('[GheListener - ERROR] - getServiceDefinition(): ' +JSON.stringify(err));
+      logger.info('[BigHookListener - ERROR] - getServiceDefinition(): ' +JSON.stringify(err));
 
     });
   });
@@ -436,7 +436,7 @@ GheListener.prototype.getServiceDefinition = function (object_name) {
  * 
  * @returns {Object} the deleted service definition (from beyond the grave).
  */
-GheListener.prototype.getDeletedServiceDefinition = function (object_name, before) {
+BigHookListener.prototype.getDeletedServiceDefinition = function (object_name, before) {
 
   return new Promise((resolve, reject) => {
 
@@ -445,13 +445,13 @@ GheListener.prototype.getDeletedServiceDefinition = function (object_name, befor
       token: this.config.ghe_access_token
     });
 
-    if (DEBUG === true) { logger.info('[GheListener - DEBUG] getDeletedServiceDefinition() - the object name: ' +object_name+ ' and the previous commit sha: ' +before); }
+    if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the object name: ' +object_name+ ' and the previous commit sha: ' +before); }
 
     octokit.gitdata.getCommit({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, commit_sha: before})
     .then((previousCommit) => {
 
       // From the previous commit, retireve the repo tree 
-      if (DEBUG === true) { logger.info('[GheListener - DEBUG] getDeletedServiceDefinition() - the pre-deletion commit: ' +JSON.stringify(previousCommit, '', '\t')); }
+      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the pre-deletion commit: ' +JSON.stringify(previousCommit, '', '\t')); }
       return octokit.gitdata.getTree({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, tree_sha: previousCommit.data.tree.sha, recursive: 1});
 
     })
@@ -470,7 +470,7 @@ GheListener.prototype.getDeletedServiceDefinition = function (object_name, befor
     })
     .then((result) => {
 
-      if (DEBUG === true) { logger.info('[GheListener - DEBUG] getDeletedServiceDefinition() - the deleted service definition: ' +JSON.stringify(result, '', '\t')); }
+      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] getDeletedServiceDefinition() - the deleted service definition: ' +JSON.stringify(result, '', '\t')); }
 
       // The content will be bas64 encoded
       const content = Buffer.from(result.data.content, 'base64').toString();
@@ -489,14 +489,14 @@ GheListener.prototype.getDeletedServiceDefinition = function (object_name, befor
         else {
 
           let error = '\''+ object_name +'\' is not an AS3 declaration. Skipping.....';
-          if (DEBUG === true) { logger.info('[GheListener - DEBUG] ' +error); }
+          if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] ' +error); }
           reject(error);
           
         }
 
       } catch (err) {
 
-        let error = '[GheListener - ERROR] - getServiceDeletedDefinition(): Attempting to parse service def: ' +err;
+        let error = '[BigHookListener - ERROR] - getServiceDeletedDefinition(): Attempting to parse service def: ' +err;
         logger.info(error);
         reject(error);
         
@@ -505,7 +505,7 @@ GheListener.prototype.getDeletedServiceDefinition = function (object_name, befor
     })
     .catch(err => {
 
-      logger.info('[GheListener - ERROR] - getServiceDeletedDefinition(): ' +JSON.stringify(err));
+      logger.info('[BigHookListener - ERROR] - getServiceDeletedDefinition(): ' +JSON.stringify(err));
 
     });
 
@@ -521,7 +521,7 @@ GheListener.prototype.getDeletedServiceDefinition = function (object_name, befor
  * 
  * @returns {String} the sha of the deleted service definition (from beyond the grave).
  */
-GheListener.prototype.identifyDeletedFileInTree = function (previousTree, object_name) {
+BigHookListener.prototype.identifyDeletedFileInTree = function (previousTree, object_name) {
 
   return new Promise((resolve, reject) => {
 
@@ -554,7 +554,7 @@ GheListener.prototype.identifyDeletedFileInTree = function (previousTree, object
  * 
  * @returns {Object} AS3's declaration processing results
  */
-GheListener.prototype.applyServiceDefinition = function (service_def) {
+BigHookListener.prototype.applyServiceDefinition = function (service_def) {
 
   return new Promise((resolve, reject) => {
 
@@ -577,8 +577,8 @@ GheListener.prototype.applyServiceDefinition = function (service_def) {
     .then((resp) => {
 
       if (DEBUG === true) {
-        logger.info('[GheListener - DEBUG] - applyServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
-        logger.info('[GheListener - DEBUG] - applyServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
+        logger.info('[BigHookListener - DEBUG] - applyServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
+        logger.info('[BigHookListener - DEBUG] - applyServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
       }
       resolve(resp.body);
 
@@ -588,7 +588,7 @@ GheListener.prototype.applyServiceDefinition = function (service_def) {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[GheListener - ERROR] - applyServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
+      logger.info('[BigHookListener - ERROR] - applyServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
 
     });
 
@@ -603,24 +603,24 @@ GheListener.prototype.applyServiceDefinition = function (service_def) {
  * 
  * @returns {String} the tenant name 
  */
-GheListener.prototype.identifyTenant = function (declaration) {
+BigHookListener.prototype.identifyTenant = function (declaration) {
 
   return new Promise((resolve, reject) => {
   
     var tenant;
     Object.keys(declaration).map((key, index) => {
-      if (DEBUG === true) { logger.info('[GheListener - DEBUG] processing declaration keys. Current key is: ' +key); }
+      if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] processing declaration keys. Current key is: ' +key); }
 
       if (declaration[key].class == 'Tenant' ) {
 
         tenant = key; 
-        if (DEBUG === true) { logger.info('[GheListener - DEBUG] - The \'Tenant\' is: ' +key); }  
+        if (DEBUG === true) { logger.info('[BigHookListener - DEBUG] - The \'Tenant\' is: ' +key); }  
         resolve(tenant);
 
       }
       else if ((Object.keys(declaration).length -1) === index && typeof tenant === 'undefined') {
 
-        reject('[GheListener - ERROR] identifyTenant() - no tenant found');
+        reject('[BigHookListener - ERROR] identifyTenant() - no tenant found');
 
       }
 
@@ -637,7 +637,7 @@ GheListener.prototype.identifyTenant = function (declaration) {
  * 
  * @returns {Object} results of the deletion action
  */
-GheListener.prototype.deleteServiceDefinition = function (tenant) {
+BigHookListener.prototype.deleteServiceDefinition = function (tenant) {
 
   return new Promise((resolve, reject) => {
 
@@ -651,8 +651,8 @@ GheListener.prototype.deleteServiceDefinition = function (tenant) {
     .then((resp) => {
 
       if (DEBUG === true) {
-        logger.info('[GheListener - DEBUG] - deleteServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
-        logger.info('[GheListener - DEBUG] - deleteServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
+        logger.info('[BigHookListener - DEBUG] - deleteServiceDefinition() - resp.statusCode: ' +JSON.stringify(resp.statusCode));
+        logger.info('[BigHookListener - DEBUG] - deleteServiceDefinition() - resp.body: ' +JSON.stringify(resp.body, '', '\t'));
       }
 
       resolve(resp.body);
@@ -663,7 +663,7 @@ GheListener.prototype.deleteServiceDefinition = function (tenant) {
       let errorStatusCode = err.getResponseOperation().getStatusCode();
       let errorBody = JSON.stringify(err.getResponseOperation().getBody(), '', '\t');
 
-      logger.info('[GheListener - ERROR] - deleteServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
+      logger.info('[BigHookListener - ERROR] - deleteServiceDefinition(): ' +errorStatusCode+ ' - ' +errorBody);
 
     });
 
@@ -680,7 +680,7 @@ GheListener.prototype.deleteServiceDefinition = function (tenant) {
  * 
  * @returns {String} HTTP Status code from creating the GitHub Issue
  */
-GheListener.prototype.createGithubIssue = function (file_name, action, results) {
+BigHookListener.prototype.createGithubIssue = function (file_name, action, results) {
 
   return new Promise((resolve, reject) => {
 
@@ -710,13 +710,13 @@ GheListener.prototype.createGithubIssue = function (file_name, action, results) 
     octokit.issues.create({baseUrl: this.config.ghe_base_url, owner: this.state.owner, repo: this.state.repo_name, title: title, labels: labels, body: body})
     .then((result) => {
 
-      logger.info('[GheListener] - createGithubIssue() result.status: ' +result.status);
+      logger.info('[BigHookListener] - createGithubIssue() result.status: ' +result.status);
       resolve(result.status);
 
     })
     .catch((err) => {
 
-      logger.info('[GheListener - ERROR] - createGithubIssue() error: ' +JSON.stringify(err, '', '\t'));
+      logger.info('[BigHookListener - ERROR] - createGithubIssue() error: ' +JSON.stringify(err, '', '\t'));
 
     });
   });
@@ -731,7 +731,7 @@ GheListener.prototype.createGithubIssue = function (file_name, action, results) 
 *
 * @returns {RestOperation}
 */
-GheListener.prototype.createRestOperation = function (uri, body) {
+BigHookListener.prototype.createRestOperation = function (uri, body) {
 
   var restOp = this.restOperationFactory.createRestOperationInstance()
       .setUri(uri)
@@ -745,4 +745,4 @@ GheListener.prototype.createRestOperation = function (uri, body) {
 
 };
 
-module.exports = GheListener;
+module.exports = BigHookListener;
